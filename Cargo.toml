@@ -1,0 +1,12 @@
+[package]
+name = "cobweb"
+version = "0.1.0"
+authors = ["david"]
+
+[dependencies]
+tokio = "*"
+futures = "*"
+mac_address = "*"
+tokio-ping = "*"
+rayon = "*"
+parking_lot = "*"
