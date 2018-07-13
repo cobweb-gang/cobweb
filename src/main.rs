@@ -15,11 +15,11 @@ use tokio::prelude::*;
 */
 
 extern crate cobweb;
-use cobweb::node::get_info;
+use cobweb::node::Info;
 use cobweb::node::NodeType;
 
 fn main() {
-    println!("{}", get_info(NodeType::Source));
+    println!("{}", Info::new(NodeType::Source));
 }
 
 /* fn main() {
