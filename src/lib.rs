@@ -1,40 +1,42 @@
-extern crate mac_address;
-extern crate fibers;
-extern crate fibers_rpc;
-extern crate mio;
+#![feature(plugin, use_extern_macros)]
+#![plugin(tarpc_plugins)]
+
+#[macro_use]
+extern crate serde_derive;
+
+#[macro_use]
+extern crate tarpc;
+
 extern crate futures;
+extern crate tokio_core;
+extern crate mac_address;
 extern crate serde;
-extern crate bincode;
-extern crate bytecodec;
-#[cfg(feature = "bincode_codec")]
 
 pub mod node {
 
-
     use std::fmt;
-    use std::net::IpAddr;
     use ::mac_address::get_mac_address;
-    use ::futures::{Future, Stream};
-    use ::fibers::{Executor, InPlaceExecutor, Spawn};
-    use ::fibers_rpc::{Call, ProcedureId};
-    use ::fibers_rpc::client::ClientServiceBuilder;
-    use ::bytecodec::bytes::{BytesEncoder, RemainingBytesDecoder};
-    use ::bytecodec::bincode_codec::{BincodeEncoder, BincodeDecoder};
-    use ::fibers_rpc::server::{HandleCall, Reply, ServerBuilder};
-    use ::bincode::{serialize, deserialize};
+    use ::futures::Future;
+    use ::tarpc::future::{client, server};
+    use ::tarpc::future::client::ClientExt;
+    use ::tarpc::util::{FirstSocketAddr, Never};
+    use ::tokio_core::reactor;
 
     // Types
 
+    #[derive(Serialize, Deserialize)]
     pub struct Info {
         mac: String,
         node_type: NodeType,
     }
 
+    #[derive(Serialize, Deserialize)]
     pub struct InfoRes {
         accepted: bool,
         blacklisted: bool,
     }
     
+    #[derive(Serialize, Deserialize)]
     pub enum NodeType {
         Source,
         Link,
@@ -113,49 +115,35 @@ pub mod node {
         }
     }
 
-    // RPCs
+    // RPC Stuff
 
-    struct InfoRpc;
-    impl Call for InfoRpc {
-        const ID: ProcedureId = ProcedureId(0);
-        const NAME: str = "info";
-
-        type Req = Info;
-        type ReqEncoder = BytesEncoder<Info>;
-        type ReqDecoder = RemainingBytesDecoder;
-
-        type Res = InfoRes;
-        type ResEncoder = BytesEncoder<InfoRes>;
-        type ResDecoder = RemainingBytesDecoder;
+    service! {
+        rpc info(info: Info) -> Info;
     }
 
-    struct InfoHandler;
-    impl HandleCall<InfoRpc> for InfoHandler {
-        fn handle_call(&self, request: <InfoRpc as Call>::Req) -> Reply<InfoRpc> {
-            Reply::done(request)
-        }
-    }
+	#[derive(Clone)]
+	struct InfoServer;
 
-    // Functions
+	impl FutureService for InfoServer {
+		type InfoFut = Result<Info, Never>;
 
-    pub fn start_rpc_server() {
-        let mut executor = InPlaceExecutor::new().unwrap();
+		fn info(&self, info: Info) -> Self::InfoFut {
+			Ok(info)
+		}
+	}
 
-        let server_addr = "127.0.0.1:1919".parse().unwrap();
-        let server = ServerBuilder::new(server_addr)
-            .add_call_handler(InfoHandler)
-            .finish(executor.handle());
-        executor.spawn(server.map_err(|e| panic!("{}", e)));
-    }
-
-    pub fn send_info(server_addr: IpAddr) {
-        let mut executor = InPlaceExecutor::new().unwrap();
-        let service = ClientServiceBuilder::new().finish(executor.handle());
-
-        let request = Info::new(NodeType::Link).unwrap();
-        let response = InfoRpc::client(&service.handle()).call(server_addr, request.clone());
-
-        executor.spawn(service.map_err(|e| panic!("{}", e)));
-        let result = executor.run_future(response).unwrap();
-    }
+	pub fn send_info() {
+		let mut reactor = reactor::Core::new().unwrap();
+		let (handle, server) = InfoServer.listen("localhost:10000".first_socket_addr(),
+		&reactor.handle(),
+		server::Options::default())
+			.unwrap();
+		reactor.handle().spawn(server);
+		let options = client::Options::default().handle(reactor.handle());
+		reactor.run(FutureClient::connect(handle.addr(), options)
+					.map_err(::tarpc::Error::from)
+					.and_then(|client| client.info(Info::new(NodeType::Link)))
+					.map(|resp| println!("{}", resp)))
+			.unwrap();
+	}
 }
