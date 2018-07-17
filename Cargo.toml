@@ -4,9 +4,13 @@ version = "0.1.0"
 authors = ["david"]
 
 [dependencies]
-tokio = "*"
+mio = "*"
+fibers = "*"
+fibers_rpc = "*"
 futures = "*"
 mac_address = "*"
-tokio-ping = "*"
 rayon = "*"
-parking_lot = "*"
+bytecodec = "*"
+serde = "*"
+serde_derive = "*"
+bincode = "*"
