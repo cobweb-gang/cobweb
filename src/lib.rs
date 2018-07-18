@@ -27,39 +27,31 @@ pub mod node {
 
     // Types
 
-    #[derive(Serialize, Deserialize)]
+    #[derive(Serialize, Deserialize, Clone)]
     pub struct Info {
         mac: String,
         node_type: NodeType,
-    }
-
-    #[derive(Serialize, Deserialize)]
-    pub struct InfoRes {
-        accepted: bool,
+        status: Status,
     }
     
-    #[derive(Serialize, Deserialize)]
+    #[derive(Serialize, Deserialize, Clone, Copy)]
     pub enum NodeType {
         Source,
         Link,
+    }
+
+    #[derive(Serialize, Deserialize, Clone)]
+    pub enum Status {
+        Req,
+        Acc,
+        Rej,
     }
 
     // Implementations
 
     impl fmt::Display for Info {
         fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-            write!(f, "{}\ntype={}", self.mac, self.node_type)
-        }
-    }
-
-    impl fmt::Display for InfoRes {
-        fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-            let accept = match self.accepted {
-                true => "ACCEPTED",
-                false => "REJECTED",
-            };
-            
-            write!(f, "{}", accept)
+            write!(f, "{}\ntype={}\nstats={}", self.mac, self.node_type, self.status)
         }
     }
 
@@ -74,15 +66,21 @@ pub mod node {
         }
     }
 
-    impl fmt::Debug for Info {
+    impl fmt::Display for Status {
         fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-            write!(f, "Info {{\n mac: {}\n node_type={}\n}}", self.mac, self.node_type)
+            let print = match *self {
+                Status::Req => "REQUESTING",
+                Status::Acc => "ACCEPTING",
+                Status::Rej => "REJECTING",
+            };
+
+            write!(f, "{}", print)
         }
     }
 
-    impl fmt::Debug for InfoRes {
+    impl fmt::Debug for Info {
         fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-            write!(f, "InfoRes {{\n accepted: {}\n}}", self.accepted)
+            write!(f, "Info {{\n mac: {}\n node_type={}\n status={}\n}}", self.mac, self.node_type, self.status)
         }
     }
 
@@ -91,6 +89,18 @@ pub mod node {
             let print = match *self {
                 NodeType::Source => "NodeType::Source",
                 NodeType::Link => "NodeType::Link",
+            };
+
+            write!(f, "{}", print)
+        }
+    }
+
+    impl fmt::Debug for Status {
+        fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+            let print = match *self {
+                Status::Req => "Status::Req",
+                Status::Acc => "Status::Acc",
+                Status::Rej => "Status::Rej",
             };
 
             write!(f, "{}", print)
@@ -108,29 +118,34 @@ pub mod node {
             Info {
                 mac: format!("{}", get_mac_address().unwrap().unwrap()),
                 node_type: type_arg,
+                status: Status::Req,
             }
         }
-    }
 
-    impl InfoRes {
-        pub fn eval(info: &Info, blacklist: &HashSet<String>) -> InfoRes {
+        pub fn eval(info: Info, type_arg: NodeType, blacklist: &HashSet<String>) -> Info {
             let re = Regex::new(r"^([[:xdigit:]]{2}[:.-]?){5}[[:xdigit:]]{2}$").unwrap();
-            let mut result: InfoRes;
+            let mut result: Info;
 
             if !re.is_match(&info.mac.as_str()) {
                 println!("Not a MAC address, brah");
-                result = InfoRes {
-                    accepted: false,
+                result = Info {
+                    mac: format!("{}", get_mac_address().unwrap().unwrap()),
+                    node_type: type_arg,
+                    status: Status::Rej,
                 };
             }
             
             if blacklist.contains(&info.mac) {
-                result = InfoRes {
-                    accepted: false,
+                result = Info {
+                    mac: format!("{}", get_mac_address().unwrap().unwrap()),
+                    node_type: type_arg,
+                    status: Status::Rej,
                 };
             } else {
-                result = InfoRes {
-                    accepted: true,
+                result = Info {
+                    mac: format!("{}", get_mac_address().unwrap().unwrap()),
+                    node_type: type_arg,
+                    status: Status::Acc,
                 };
             }
 
@@ -153,7 +168,7 @@ pub mod node {
 		fn info(&self, info: Info) -> Self::InfoFut {
             println!("Bruh! The info function was called");
 
-			Ok(info)
+			Ok(Info::eval(info, NodeType::Link, &HashSet::new()))
 		}
 	}
 
@@ -172,22 +187,24 @@ pub mod node {
 			.unwrap();
 	}
 
+    // Tests
+
     #[test]
     fn info_eval() {
         let info = Info::new(NodeType::Link);
         let mut list = HashSet::new();
-        let info_res = InfoRes::eval(&info, &list);
+        let info_res = Info::eval(info.clone(), NodeType::Link, &list);
         list.insert(String::from("00:1D:72:8E:C9:AE"));
-        let info_res_blacklisted = InfoRes::eval(&info, &list);
+        let info_res_blacklisted = Info::eval(info, NodeType::Link, &list);
 
         assert_eq!(
-            format!("{}", info_res),
-            "ACCEPTED"
+            format!("{}", info_res.status),
+            "ACCEPTING"
             );
         
         assert_eq!(
-            format!("{}", info_res_blacklisted),
-            "REJECTED"
+            format!("{}", info_res_blacklisted.status),
+            "REJECTING"
             );
     }
 }
