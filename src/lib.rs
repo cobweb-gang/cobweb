@@ -171,4 +171,23 @@ pub mod node {
 					.map(|resp| println!("{}", resp)))
 			.unwrap();
 	}
+
+    #[test]
+    fn info_eval() {
+        let info = Info::new(NodeType::Link);
+        let mut list = HashSet::new();
+        let info_res = InfoRes::eval(&info, &list);
+        list.insert(String::from("00:1D:72:8E:C9:AE"));
+        let info_res_blacklisted = InfoRes::eval(&info, &list);
+
+        assert_eq!(
+            format!("{}", info_res),
+            "ACCEPTED"
+            );
+        
+        assert_eq!(
+            format!("{}", info_res_blacklisted),
+            "REJECTED"
+            );
+    }
 }
