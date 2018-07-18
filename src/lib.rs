@@ -11,10 +11,13 @@ extern crate futures;
 extern crate tokio_core;
 extern crate mac_address;
 extern crate serde;
+extern crate regex;
 
 pub mod node {
 
     use std::fmt;
+    use std::collections::HashSet;
+    use ::regex::Regex;
     use ::mac_address::get_mac_address;
     use ::futures::Future;
     use ::tarpc::future::{client, server};
@@ -33,7 +36,6 @@ pub mod node {
     #[derive(Serialize, Deserialize)]
     pub struct InfoRes {
         accepted: bool,
-        blacklisted: bool,
     }
     
     #[derive(Serialize, Deserialize)]
@@ -57,12 +59,7 @@ pub mod node {
                 false => "REJECTED",
             };
             
-            let blacklist = match self.blacklisted {
-                true => "Your device has been blacklisted.",
-                false => "An error has occurred.",
-            };
-            
-            write!(f, "{}\n{}", accept, blacklist)
+            write!(f, "{}", accept)
         }
     }
 
@@ -85,7 +82,7 @@ pub mod node {
 
     impl fmt::Debug for InfoRes {
         fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-            write!(f, "InfoRes {{\n accepted: {}\n blacklisted={}\n}}", self.accepted, self.blacklisted)
+            write!(f, "InfoRes {{\n accepted: {}\n}}", self.accepted)
         }
     }
 
@@ -115,6 +112,32 @@ pub mod node {
         }
     }
 
+    impl InfoRes {
+        pub fn eval(info: &Info, blacklist: &HashSet<String>) -> InfoRes {
+            let re = Regex::new(r"^([[:xdigit:]]{2}[:.-]?){5}[[:xdigit:]]{2}$").unwrap();
+            let mut result: InfoRes;
+
+            if !re.is_match(&info.mac.as_str()) {
+                println!("Not a MAC address, brah");
+                result = InfoRes {
+                    accepted: false,
+                };
+            }
+            
+            if blacklist.contains(&info.mac) {
+                result = InfoRes {
+                    accepted: false,
+                };
+            } else {
+                result = InfoRes {
+                    accepted: true,
+                };
+            }
+
+            result
+        }
+    }
+
     // RPC Stuff
 
     service! {
@@ -128,6 +151,8 @@ pub mod node {
 		type InfoFut = Result<Info, Never>;
 
 		fn info(&self, info: Info) -> Self::InfoFut {
+            println!("Bruh! The info function was called");
+
 			Ok(info)
 		}
 	}

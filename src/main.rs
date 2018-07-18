@@ -1,3 +1,7 @@
+extern crate cobweb;
+
+use cobweb::node::send_info;
+
 fn main() {
-    println!("Hello world B)");
+    send_info();
 }
