@@ -1,5 +1,6 @@
 extern crate cobweb;
+use cobweb::rpc::Info;
 
 fn main() {
-    println!("Hello world B)");
+    Info::uuid();
 }

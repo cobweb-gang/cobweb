@@ -3,15 +3,15 @@ authors = ["david"]
 name = "cobweb"
 version = "0.1.0"
 [dependencies]
-mac_address = "0.7.0"
 futures = "0.1.23"
 tokio-core = "0.1.17"
 tarpc = "0.9.0"
 tarpc-plugins = "0.2.0"
 serde = "1.0.70"
 serde_derive = "1.0.70"
-regex = "1.0.2"
 tun-tap = "0.1.1"
 tokio-codec = "0.1.0"
 tokio-io = "0.1.7"
 bytes = "0.4.8"
+uuid = { version = "0.6.5", features = ["serde", "v4"] }
+directories = "1.0.1"
