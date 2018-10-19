@@ -1,6 +1,6 @@
 extern crate cobweb;
-use cobweb::rpc::Info;
+use cobweb::proxy;
 
 fn main() {
-    Info::uuid();
+    proxy::start_proxy();
 }

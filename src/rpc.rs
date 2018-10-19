@@ -1,12 +1,12 @@
 use std::fmt;
 use std::fs;
-use ::futures::Future;
-use ::tarpc::future::{client, server};
-use ::tarpc::future::client::ClientExt;
-use ::tarpc::util::{FirstSocketAddr, Never};
-use ::tokio_core::reactor;
-use ::uuid::Uuid;
-use ::directories::ProjectDirs;
+use futures::prelude::*;
+use tarpc::future::{client, server};
+use tarpc::future::client::ClientExt;
+use tarpc::util::{FirstSocketAddr, Never};
+use tokio_core::reactor;
+use uuid::Uuid;
+use directories::ProjectDirs;
 
 // Types
 

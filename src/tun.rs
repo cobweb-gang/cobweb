@@ -64,7 +64,6 @@ pub fn start_tun_tcp() {
     let loc_address = "127.0.0.1:6969".parse().unwrap();
     let listener = TcpListener::bind(&loc_address, &handle)
         .unwrap();
-    println!("Listening on port 6969");
     let server = listener.incoming().for_each(|(sock, _)| {
         println!("Ayy!! We got a new connection");
         println!("{:?}", sock);
@@ -94,6 +93,7 @@ pub fn start_tun_udp() {
     let rem_address = "0.0.0.0:11443".parse().unwrap();
     let socket = UdpSocket::bind(&loc_address, &handle)
         .unwrap();
+    println!("Listening on port 6969");
     let (sender, receiver) = socket.framed(UdpVecCodec(rem_address))
         .split();
     let tun = Iface::new("vpn%d", Mode::Tun)
