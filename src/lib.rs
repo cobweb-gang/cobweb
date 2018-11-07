@@ -1,6 +1,3 @@
-#![feature(generators)]
-#![feature(plugin)]
-
 extern crate futures;
 extern crate tokio_core;
 extern crate rudp;
