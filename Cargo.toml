@@ -3,24 +3,7 @@ authors = ["david"]
 name = "cobweb"
 version = "0.1.0"
 [dependencies]
-bytes = "0.4.10"
-directories = "1.0.1"
 futures = "0.1.23"
-serde = "1.0.70"
-serde_derive = "1.0.70"
-tarpc = "0.12.1"
-tokio-codec = "0.1.0"
 tokio-core = "0.1.17"
-tokio-io = "0.1.7"
 tun-tap = "0.1.1"
-tarpc-plugins = "0.4.0"
-hyper = "0.12.10"
-httpcodec = "0.2.2"
-bytecodec = "0.4.11"
-tokio = "0.1.11"
-mio = "0.6.16"
 rudp = { path = "../rudp" }
-
-[dependencies.uuid]
-features = ["serde", "v4"]
-version = "0.6.5"
