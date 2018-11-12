@@ -6,4 +6,5 @@ version = "0.1.0"
 futures = "0.1.23"
 tokio-core = "0.1.17"
 tun-tap = "0.1.1"
-rudp = { path = "../rudp" }
+miscreant = "0.3.0"
+spake2 = "0.1.1"
