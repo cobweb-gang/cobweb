@@ -2,33 +2,32 @@ extern crate cobweb;
 extern crate tokio_core;
 extern crate futures;
 extern crate tun_tap;
-extern crate keybob;
 
 use std::io::Result;
 use tokio_core::reactor::Core;
 use tokio_core::net::UdpSocket;
 use cobweb::vpn::{EncryptedTun, UdpVecCodec};
-use cobweb::sec::{En, De};
+use cobweb::sec::en::{En, De};
+use cobweb::sec::client::handshake;
 use tun_tap::async::Async;
-use keybob::{Key, KeyType};
 use futures::stream::{SplitStream, SplitSink};
 use futures::sink::With;
 use futures::stream::Map;
 use futures::prelude::*;
 
 fn main() {
-    let loc_addr = "127.0.0.1:1337".parse().unwrap();
-    let rem_addr = "127.0.0.1:1338".parse().unwrap();
-    let key = Key::from_pw(KeyType::Aes128, "test", "cobweb");
+    let loc_addr = "127.0.0.1:1337";
+    let rem_addr = "127.0.0.1:1338";
     let mut core = Core::new().unwrap();
     let handle = core.handle();
 
+    let sock = UdpSocket::bind(&loc_addr.parse().unwrap(), &handle).unwrap();
+    let key = handshake(&loc_addr, &rem_addr, &sock, "test");
+    let (udp_sink, udp_stream) = sock.framed(UdpVecCodec::new(rem_addr.parse().unwrap()))
+    	.split();
+
     let tun = EncryptedTun::<With<SplitSink<Async>, Vec<u8>, De, Result<Vec<u8>>>, Map<SplitStream<Async>, En>>::new(&key, &handle);
     let (tun_sink, tun_stream) = tun.split();
-
-    let sock = UdpSocket::bind(&loc_addr, &handle).unwrap();
-    let (udp_sink, udp_stream) = sock.framed(UdpVecCodec::new(rem_addr))
-    	.split();
 
     let sender = tun_stream.forward(udp_sink);
     let receiver = udp_stream.forward(tun_sink);

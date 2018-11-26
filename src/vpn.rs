@@ -1,4 +1,4 @@
-use sec::{En, De};
+use sec::en::{En, De};
 use std::io::Result;
 use keybob::Key;
 use tun_tap::{Iface, Mode};
