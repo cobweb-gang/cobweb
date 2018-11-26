@@ -1,12 +1,16 @@
-use tokio_core::net::{UdpCodec, UdpSocket, UdpFramed};
-use tokio_core::reactor::Handle;
+use sec::{En, De};
+use std::io::Result;
+use keybob::Key;
 use tun_tap::{Iface, Mode};
 use tun_tap::async::Async;
 use std::process::Command;
 use std::net::SocketAddr;
-use std::io::Result;
+use tokio_core::reactor::Handle;
+use tokio_core::net::UdpCodec;
 use futures::prelude::*;
 use futures::stream::{SplitSink, SplitStream};
+use futures::sink::With;
+use futures::stream::Map;
 
 fn cmd(cmd: &str, args: &[&str]) {
     let ecode = Command::new("ip")
@@ -15,10 +19,55 @@ fn cmd(cmd: &str, args: &[&str]) {
         .unwrap()
         .wait()
         .unwrap();
-    assert!(ecode.success(), "Failed to execte {}", cmd);
+    assert!(ecode.success(), "Failed to execute {}", cmd);
+}
+
+pub struct EncryptedTun<T: Sink, U: Stream> {
+    sink: T,
+    stream: U,
+}
+
+impl<T, U> EncryptedTun<T, U>
+where T: Sink<SinkItem=Vec<u8>>,
+      U: Stream<Item=Vec<u8>>,
+      U::Error: std::fmt::Debug,
+{
+    pub fn new(key: &Key, handle: &Handle) -> EncryptedTun<
+            With<SplitSink<Async>, Vec<u8>, De, Result<Vec<u8>>>,
+            Map<SplitStream<Async>, En>> 
+        {
+        let encryptor = En::new(&key);
+        let decryptor = De::new(&key);
+        
+        let tun = Iface::new("vpn%d", Mode::Tun)
+            .unwrap();
+        cmd("ip", &["addr", "add", "dev", tun.name(), "10.107.1.3/24"]);
+        cmd("ip", &["link", "set", "up", "dev", tun.name()]);
+        let (sink, stream) = Async::new(tun, handle)
+            .unwrap()
+            .split();
+
+        let decrypted_sink = sink.with(decryptor);
+        let encrypted_stream = stream.map(encryptor);
+        
+        EncryptedTun {
+            sink: decrypted_sink,
+            stream: encrypted_stream,
+        }
+    }
+
+    pub fn split(self) -> (T, U) {
+        (self.sink, self.stream)
+    }
 }
 
 pub struct UdpVecCodec(SocketAddr);
+
+impl UdpVecCodec {
+    pub fn new(addr: SocketAddr) -> Self {
+        UdpVecCodec(addr)
+    }
+}
 
 impl UdpCodec for UdpVecCodec {
 	type In = Vec<u8>;
@@ -30,56 +79,4 @@ impl UdpCodec for UdpVecCodec {
 		buf.extend(&msg);
 		self.0
 	}
-}
-
-pub struct VpnSocket<T: Sink, U: Stream, V: Sink, W: Stream> {
-    tun_sink: T,
-    tun_stream: U,
-    udp_sink: V,
-    udp_stream: W,
-}
-
-impl<T, U, V, W> VpnSocket<T, U, V, W> 
-where T: Sink,
-      U: Stream,
-      T::SinkItem: From<Vec<u8>>,
-      U::Item: std::convert::AsRef<[u8]>,
-      U::Error: std::fmt::Debug,
-      V: Sink,
-      W: Stream,
-      V::SinkItem: From<Vec<u8>>,
-      W::Item: std::convert::AsRef<[u8]>,
-      W::Error: std::fmt::Debug,
-{
-
-    pub fn connect(loc_addr: &SocketAddr, rem_addr: &SocketAddr, handle: &Handle) -> Result<VpnSocket<SplitSink<Async>, SplitStream<Async>, SplitSink<UdpFramed<UdpVecCodec>>, SplitStream<UdpFramed<UdpVecCodec>>>> {
-        let socket = UdpSocket::bind(loc_addr, handle).unwrap();
-        let (sender, receiver) = socket.framed(UdpVecCodec(*rem_addr))
-            .split();
-        let tun = Iface::new("vpn%d", Mode::Tun)
-            .unwrap();
-        cmd("ip", &["addr", "add", "dev", tun.name(), "10.107.1.3/24"]);
-        cmd("ip", &["link", "set", "up", "dev", tun.name()]);
-        let (sink, stream) = Async::new(tun, &handle)
-            .unwrap()
-            .split();
-        Ok(VpnSocket {
-            tun_sink: sink,
-            tun_stream: stream,
-            udp_sink: sender,
-            udp_stream: receiver
-        })
-    }
-
-    pub fn get_tun(self) -> Result<(T, U)> {
-        Ok((self.tun_sink, self.tun_stream))
-    }
-
-    pub fn get_udp(self) -> Result<(V, W)> {
-        Ok((self.udp_sink, self.udp_stream))
-    }
-
-    pub fn get_all(self) -> Result<((T, U), (V, W))> {
-        Ok(((self.tun_sink, self.tun_stream), (self.udp_sink, self.udp_stream)))
-    }
 }

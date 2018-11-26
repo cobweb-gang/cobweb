@@ -8,3 +8,8 @@ tokio-core = "0.1.17"
 tun-tap = "0.1.1"
 miscreant = "0.3.0"
 spake2 = "0.1.1"
+keybob = "0.3.1"
+iui = "0.3.0"
+
+[build]
+rustflags = ["-Ctarget-feature=+aes"]
