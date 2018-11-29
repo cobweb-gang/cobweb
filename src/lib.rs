@@ -8,6 +8,8 @@ extern crate tun_tap;
 extern crate miscreant;
 extern crate spake2;
 extern crate keybob;
+extern crate iui;
 
 pub mod vpn;
 pub mod sec;
+pub mod gui;
