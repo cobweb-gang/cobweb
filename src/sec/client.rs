@@ -1,17 +1,16 @@
 use spake2::{Ed25519Group, Identity, Password, SPAKE2};
 use keybob::{Key, KeyType};
 use tokio_core::net::UdpSocket;
-use std::net::{SocketAddr, SocketAddrV4};
-use std::str::FromStr;
+use std::net::SocketAddr;
 
-pub fn handshake(client_id: &str, server_id: &str, sock: &UdpSocket, pass: &str) -> Key {
+pub fn handshake(client_id: &str, server_addr: &SocketAddr, sock: &UdpSocket, pass: &str) -> Key {
     let (spake, outbound_msg) = SPAKE2::<Ed25519Group>::start_a(
         &Password::new(pass.as_bytes()),
         &Identity::new(client_id.as_bytes()),
-        &Identity::new(server_id.as_bytes()));
+        &Identity::new(format!("{}", server_addr).as_bytes())
+        );
 
-    let server_addr = SocketAddr::from(SocketAddrV4::from_str(server_id).unwrap());
-    sock.connect(&server_addr).unwrap();
+    sock.connect(server_addr).unwrap();
     sock.send(outbound_msg.as_slice()).unwrap();
     let inbound_msg: &mut [u8] = &mut [0u8];
     sock.recv(inbound_msg).unwrap();

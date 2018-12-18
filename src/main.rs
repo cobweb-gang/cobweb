@@ -1,36 +1,65 @@
 extern crate cobweb;
-extern crate tokio_core;
-extern crate futures;
-extern crate tun_tap;
+extern crate iui;
 
-use std::io::Result;
-use tokio_core::reactor::Core;
-use tokio_core::net::UdpSocket;
-use cobweb::vpn::{EncryptedTun, UdpVecCodec};
-use cobweb::sec::en::{En, De};
-use cobweb::sec::client::handshake;
-use tun_tap::async::Async;
-use futures::stream::{SplitStream, SplitSink};
-use futures::sink::With;
-use futures::stream::Map;
-use futures::prelude::*;
+use cobweb::vpn::init;
+use iui::prelude::*;
+use iui::controls::{Label, Button, Entry, VerticalBox, Group};
+use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 
 fn main() {
-    let loc_addr = "127.0.0.1:1337";
-    let rem_addr = "127.0.0.1:1338";
-    let mut core = Core::new().unwrap();
-    let handle = core.handle();
+    let ui = UI::init().expect("Couldn't initialize UI library");
+    let mut win = Window::new(&ui, "Cobweb", 400, 400, WindowType::NoMenubar);
+    
+    let mut vbox = VerticalBox::new(&ui);
+    vbox.set_padded(&ui, true);
 
-    let sock = UdpSocket::bind(&loc_addr.parse().unwrap(), &handle).unwrap();
-    let key = handshake(&loc_addr, &rem_addr, &sock, "test");
-    let (udp_sink, udp_stream) = sock.framed(UdpVecCodec::new(rem_addr.parse().unwrap()))
-    	.split();
+    let mut group_vbox = VerticalBox::new(&ui);
+    let mut group = Group::new(&ui, "Group");
 
-    let tun = EncryptedTun::<With<SplitSink<Async>, Vec<u8>, De, Result<Vec<u8>>>, Map<SplitStream<Async>, En>>::new(&key, &handle);
-    let (tun_sink, tun_stream) = tun.split();
+    let mut quit_button = Button::new(&ui, "Quit");
+    quit_button.on_clicked(&ui, {
+        let ui = ui.clone();
+        move |_| {
+            ui.quit();
+        }
+    });
 
-    let sender = tun_stream.forward(udp_sink);
-    let receiver = udp_stream.forward(tun_sink);
-    core.run(sender.join(receiver))
-        .unwrap();
+    let mut conn_button = Button::new(&ui, "Connect");
+
+    let mut ip_text = String::new();
+    ip_text.push_str("IP Address");
+    let ip_label = Label::new(&ui, &ip_text);
+
+    let ip_entry = Entry::new(&ui);
+
+    let mut pass_text = String::new();
+    pass_text.push_str("Password");
+    let pass_label = Label::new(&ui, &pass_text);
+
+    let pass_entry = Entry::new(&ui);
+
+    group_vbox.append(&ui, ip_label, LayoutStrategy::Compact);
+    group_vbox.append(&ui, ip_entry.clone(), LayoutStrategy::Compact);
+    group_vbox.append(&ui, pass_label, LayoutStrategy::Compact);
+    group_vbox.append(&ui, pass_entry.clone(), LayoutStrategy::Compact);
+    group_vbox.append(&ui, conn_button.clone(), LayoutStrategy::Compact);
+    group.set_child(&ui, group_vbox);
+    vbox.append(&ui, group, LayoutStrategy::Compact);
+    vbox.append(&ui, quit_button, LayoutStrategy::Compact);
+
+    conn_button.on_clicked(&ui, {
+        let ui = ui.clone();
+        move |btn| {
+            let pass = pass_entry.value(&ui);
+            let ip_vec: Vec<u8> = ip_entry.value(&ui).split(".").into_iter().map(|num| num.parse::<u8>().unwrap()).collect();
+            let ip = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(ip_vec[0], ip_vec[1], ip_vec[2], ip_vec[3])), 1337);
+            // Parse the string by '.', returning an array of the numbers
+            init(ip, &pass);
+            btn.set_text(&ui, "Connected");
+        }
+    });
+
+    win.set_child(&ui, vbox);
+    win.show(&ui);
+    ui.main();
 }

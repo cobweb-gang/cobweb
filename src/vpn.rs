@@ -1,16 +1,36 @@
 use sec::en::{En, De};
+use sec::client::handshake;
 use std::io::Result;
 use keybob::Key;
 use tun_tap::{Iface, Mode};
 use tun_tap::async::Async;
 use std::process::Command;
 use std::net::SocketAddr;
-use tokio_core::reactor::Handle;
-use tokio_core::net::UdpCodec;
+use tokio_core::reactor::{Core, Handle};
+use tokio_core::net::{UdpSocket, UdpCodec};
 use futures::prelude::*;
 use futures::stream::{SplitSink, SplitStream};
 use futures::sink::With;
 use futures::stream::Map;
+
+pub fn init(rem_addr: SocketAddr, pass: &String) {
+    let loc_addr = "127.0.0.1:1337";
+    let mut core = Core::new().unwrap();
+    let handle = core.handle();
+
+    let sock = UdpSocket::bind(&loc_addr.parse().unwrap(), &handle).unwrap();
+    let key = handshake(&loc_addr, &rem_addr, &sock, pass);
+    let (udp_sink, udp_stream) = sock.framed(UdpVecCodec::new(rem_addr))
+    	.split();
+
+    let tun = EncryptedTun::<With<SplitSink<Async>, Vec<u8>, De, Result<Vec<u8>>>, Map<SplitStream<Async>, En>>::new(&key, &handle);
+    let (tun_sink, tun_stream) = tun.split();
+
+    let sender = tun_stream.forward(udp_sink);
+    let receiver = udp_stream.forward(tun_sink);
+    core.run(sender.join(receiver))
+        .unwrap();
+}
 
 fn cmd(cmd: &str, args: &[&str]) {
     let ecode = Command::new("ip")
