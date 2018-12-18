@@ -12,4 +12,3 @@ extern crate iui;
 
 pub mod vpn;
 pub mod sec;
-pub mod gui;
