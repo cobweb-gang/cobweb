@@ -50,12 +50,26 @@ fn main() {
     conn_button.on_clicked(&ui, {
         let ui = ui.clone();
         move |btn| {
+            let mut err = false;
             let pass = pass_entry.value(&ui);
-            let ip_vec: Vec<u8> = ip_entry.value(&ui).split(".").into_iter().map(|num| num.parse::<u8>().unwrap()).collect();
-            let ip = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(ip_vec[0], ip_vec[1], ip_vec[2], ip_vec[3])), 1337);
-            // Parse the string by '.', returning an array of the numbers
-            init(ip, &pass);
-            btn.set_text(&ui, "Connected");
+            let mut ip_vec: Vec<u8> = vec![];
+
+            for num in ip_entry.value(&ui).split(".").into_iter() {
+                ip_vec.push(num.parse::<u8>()
+                        .unwrap_or_else(|_| {
+                            btn.set_text(&ui, "ERROR: Not an IPv4 address");
+                            err = true;
+                            1
+                        })
+                );
+            }
+
+            if err == false {
+                let ip = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(ip_vec[0], ip_vec[1], ip_vec[2], ip_vec[3])), 1337);
+                // Parse the string by '.', returning an array of the numbers
+                init(ip, &pass);
+                btn.set_text(&ui, "Connected");
+            }
         }
     });
 
