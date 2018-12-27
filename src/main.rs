@@ -66,9 +66,10 @@ fn main() {
 
             if err == false {
                 let ip = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(ip_vec[0], ip_vec[1], ip_vec[2], ip_vec[3])), 1337);
-                // Parse the string by '.', returning an array of the numbers
-                init(ip, &pass);
                 btn.set_text(&ui, "Connected");
+                init(ip, &pass).unwrap_or_else(|err| {
+                    btn.set_text(&ui, err);
+                });
             }
         }
     });

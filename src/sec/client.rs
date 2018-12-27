@@ -3,7 +3,7 @@ use keybob::{Key, KeyType};
 use tokio_core::net::UdpSocket;
 use std::net::SocketAddr;
 
-pub fn handshake(client_id: &str, server_addr: &SocketAddr, sock: &UdpSocket, pass: &str) -> Result<Key, String> {
+pub fn handshake(client_id: &str, server_addr: &SocketAddr, sock: &UdpSocket, pass: &str) -> Result<Key, &'static str> {
     let mut error = "";
     let (spake, outbound_msg) = SPAKE2::<Ed25519Group>::start_a(
         &Password::new(pass.as_bytes()),
@@ -18,8 +18,14 @@ pub fn handshake(client_id: &str, server_addr: &SocketAddr, sock: &UdpSocket, pa
         error = "ERROR: Failed handshake (sending password to server)";
         0
     });
+
+    if error != "" {
+        return Err(error);
+    }
+
     let inbound_msg: &mut [u8] = &mut [0u8];
     sock.recv(inbound_msg).unwrap_or_else(|_| {
+        println!("Error is being handled");
         error = "ERROR: Failed handshake (receiving key from server)";
         0
     });
@@ -28,10 +34,8 @@ pub fn handshake(client_id: &str, server_addr: &SocketAddr, sock: &UdpSocket, pa
     let key_pass = format!("{:?}", key);
 
     let result = match error {
-        "ERROR: Unable to connect to server" => Err(String::from(error)),
-        "ERROR: Failed handshake (sending password to server)" => Err(String::from(error)),
-        "ERROR: Failed handshake (receiving key from server)" => Err(String::from(error)),
-        _ => Ok(Key::from_pw(KeyType::Aes128, &key_pass, client_id)),
+        "" => Ok(Key::from_pw(KeyType::Aes128, &key_pass, client_id)),
+        _ => Err(error),
     };
 
     result

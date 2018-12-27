@@ -1,7 +1,7 @@
 use sec::en::{En, De};
 use sec::client::handshake;
 use std::io::Result;
-use keybob::Key;
+use keybob::{Key, KeyType};
 use tun_tap::{Iface, Mode};
 use tun_tap::async::Async;
 use std::process::Command;
@@ -12,24 +12,41 @@ use futures::prelude::*;
 use futures::stream::{SplitSink, SplitStream};
 use futures::sink::With;
 use futures::stream::Map;
+use std::result::Result as DualResult;
 
-pub fn init(rem_addr: SocketAddr, pass: &String) {
+pub fn init(rem_addr: SocketAddr, pass: &String) -> DualResult<(), &'static str> {
+    let mut error = "";
     let loc_addr = "127.0.0.1:1337";
     let mut core = Core::new().unwrap();
     let handle = core.handle();
 
     let sock = UdpSocket::bind(&loc_addr.parse().unwrap(), &handle).unwrap();
-    let key = handshake(&loc_addr, &rem_addr, &sock, pass);
+    let key = handshake(&loc_addr, &rem_addr, &sock, pass).unwrap_or_else(|err| {
+        error = err;
+        Key::from_pw(KeyType::Aes128, pass, loc_addr)
+    });
+
+    if error != "" {
+        return Err(error);
+    }
+
     let (udp_sink, udp_stream) = sock.framed(UdpVecCodec::new(rem_addr))
     	.split();
 
     let tun = EncryptedTun::<With<SplitSink<Async>, Vec<u8>, De, Result<Vec<u8>>>, Map<SplitStream<Async>, En>>::new(&key, &handle);
-    let (tun_sink, tun_stream) = tun.split();
+
+    if tun.is_err() {
+        return Err("ERROR: Permission denied. Try running as superuser");
+    }
+
+    let (tun_sink, tun_stream) = tun.unwrap().split();
 
     let sender = tun_stream.forward(udp_sink);
     let receiver = udp_stream.forward(tun_sink);
     core.run(sender.join(receiver))
         .unwrap();
+    
+    Ok(())
 }
 
 fn cmd(cmd: &str, args: &[&str]) {
@@ -52,28 +69,36 @@ where T: Sink<SinkItem=Vec<u8>>,
       U: Stream<Item=Vec<u8>>,
       U::Error: std::fmt::Debug,
 {
-    pub fn new(key: &Key, handle: &Handle) -> EncryptedTun<
+    pub fn new(key: &Key, handle: &Handle) -> DualResult<
+        EncryptedTun<
             With<SplitSink<Async>, Vec<u8>, De, Result<Vec<u8>>>,
-            Map<SplitStream<Async>, En>> 
+            Map<SplitStream<Async>, En>
+            >,
+        &'static str>
         {
         let encryptor = En::new(&key);
         let decryptor = De::new(&key);
         
-        let tun = Iface::new("vpn%d", Mode::Tun)
-            .unwrap();
-        cmd("ip", &["addr", "add", "dev", tun.name(), "10.107.1.3/24"]);
-        cmd("ip", &["link", "set", "up", "dev", tun.name()]);
-        let (sink, stream) = Async::new(tun, handle)
+        let tun = Iface::new("vpn%d", Mode::Tun);
+
+        if tun.is_err() {
+                return Err("ERROR: Permission denied. Try running as superuser");
+        };
+       
+        let tun_ok = tun.unwrap();
+        cmd("ip", &["addr", "add", "dev", tun_ok.name(), "10.107.1.3/24"]);
+        cmd("ip", &["link", "set", "up", "dev", tun_ok.name()]);
+        let (sink, stream) = Async::new(tun_ok, handle)
             .unwrap()
             .split();
 
         let decrypted_sink = sink.with(decryptor);
         let encrypted_stream = stream.map(encryptor);
         
-        EncryptedTun {
+        Ok(EncryptedTun {
             sink: decrypted_sink,
             stream: encrypted_stream,
-        }
+        })
     }
 
     pub fn split(self) -> (T, U) {
