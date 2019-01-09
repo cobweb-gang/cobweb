@@ -14,7 +14,7 @@ fn main() {
     vbox.set_padded(&ui, true);
 
     let mut group_vbox = VerticalBox::new(&ui);
-    let mut group = Group::new(&ui, "Group");
+    let mut group = Group::new(&ui, "Cobweb");
 
     let mut quit_button = Button::new(&ui, "Quit");
     quit_button.on_clicked(&ui, {
