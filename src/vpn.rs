@@ -4,16 +4,20 @@ use std::io::Result;
 use keybob::{Key, KeyType};
 use tun_tap::{Iface, Mode};
 use tun_tap::async::Async;
+use mac_utun::get_utun;
 use std::process::Command;
 use std::net::SocketAddr;
 use tokio_core::reactor::{Core, Handle};
 use tokio_core::net::{UdpSocket, UdpCodec};
+use tokio::net::UdpSocket as FullUdpSocket;
+use tokio::net::UdpFramed as FullUdpFramed;
 use futures::prelude::*;
 use futures::stream::{SplitSink, SplitStream};
 use futures::sink::With;
 use futures::stream::Map;
 use std::result::Result as DualResult;
 
+#[cfg(target_os = "linux")]
 pub fn init(rem_addr: SocketAddr, pass: &String) -> DualResult<(), &'static str> {
     let mut error = "";
     let loc_addr = "127.0.0.1:1337";
@@ -31,6 +35,43 @@ pub fn init(rem_addr: SocketAddr, pass: &String) -> DualResult<(), &'static str>
     }
 
     let (udp_sink, udp_stream) = sock.framed(UdpVecCodec::new(rem_addr))
+    	.split();
+
+    let tun = EncryptedTun::<With<SplitSink<Async>, Vec<u8>, De, Result<Vec<u8>>>, Map<SplitStream<Async>, En>>::new(&key, &handle);
+
+    if tun.is_err() {
+        return Err("ERROR: Permission denied. Try running as superuser");
+    }
+
+    let (tun_sink, tun_stream) = tun.unwrap().split();
+
+    let sender = tun_stream.forward(udp_sink);
+    let receiver = udp_stream.forward(tun_sink);
+    core.run(sender.join(receiver))
+        .unwrap();
+    
+    Ok(())
+}
+
+#[cfg(target_os = "macos")]
+pub fn init(rem_addr: SocketAddr, pass: &String) -> DualResult<(), &'static str> {
+    let mut error = "";
+    let loc_addr = "127.0.0.1:1337";
+    let mut core = Core::new().unwrap();
+    let handle = core.handle();
+
+    let utun = get_utun().unwrap().bind(loc_addr).unwrap();
+    let sock = FullUdpSocket::from_std(utun, &handle).unwrap();
+    let key = handshake(&loc_addr, &rem_addr, &sock, pass).unwrap_or_else(|err| {
+        error = err;
+        Key::from_pw(KeyType::Aes128, pass, loc_addr)
+    });
+
+    if error != "" {
+        return Err(error);
+    }
+
+    let (udp_sink, udp_stream) = FullUdpFramed.new(sock, UdpVecCodec::new(rem_addr))
     	.split();
 
     let tun = EncryptedTun::<With<SplitSink<Async>, Vec<u8>, De, Result<Vec<u8>>>, Map<SplitStream<Async>, En>>::new(&key, &handle);

@@ -4,11 +4,13 @@
 
 extern crate futures;
 extern crate tokio_core;
+extern crate tokio;
 extern crate tun_tap;
 extern crate miscreant;
 extern crate spake2;
 extern crate keybob;
 extern crate iui;
+extern crate mac_utun;
 
 pub mod vpn;
 pub mod sec;
