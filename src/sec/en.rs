@@ -1,11 +1,11 @@
 use keybob::Key;
 use miscreant::stream::{Encryptor, Decryptor, NONCE_SIZE};
-use miscreant::aead::Aes128Siv;
+use miscreant::Aes128SivAead;
 use std::io::Result;
 
 const NONCE_PREFIX: &[u8; NONCE_SIZE] = &[0u8; NONCE_SIZE];
 
-pub struct En(Encryptor<Aes128Siv>);
+pub struct En(Encryptor<Aes128SivAead>);
 
 impl En {
     pub fn new(key: &Key) -> Self {
@@ -27,7 +27,7 @@ impl FnMut<(Vec<u8>,)> for En {
     }
 }
 
-pub struct De(Decryptor<Aes128Siv>);
+pub struct De(Decryptor<Aes128SivAead>);
 
 impl De {
     pub fn new(key: &Key) -> Self {

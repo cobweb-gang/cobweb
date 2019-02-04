@@ -11,6 +11,7 @@ extern crate spake2;
 extern crate keybob;
 extern crate iui;
 extern crate mac_utun;
+extern crate futures_retry;
 
 pub mod vpn;
 pub mod sec;

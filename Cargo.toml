@@ -6,13 +6,14 @@ version = "0.1.0"
 futures = "0.1.23"
 tokio-core = "0.1.17"
 tun-tap = "0.1.1"
-miscreant = "0.3.0"
 spake2 = "0.1.1"
 keybob = "0.3.1"
 iui = "0.3.0"
 mac_utun = { path = "./mac_utun" }
 tokio = "0.1.14"
 tokio-uds = "0.2.5"
+futures-retry = "0.3.0"
+miscreant = "0.4.2"
 
 [build]
 rustflags = ["-Ctarget-feature=+aes"]
