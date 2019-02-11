@@ -12,6 +12,7 @@ extern crate keybob;
 extern crate iui;
 extern crate mac_utun;
 extern crate futures_retry;
+extern crate my_internet_ip;
 
 pub mod vpn;
 pub mod sec;

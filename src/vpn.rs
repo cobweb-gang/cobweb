@@ -21,11 +21,17 @@ use std::result::Result as DualResult;
 pub fn init(rem_addr: SocketAddr, pass: &String) -> DualResult<(), &'static str> {
     let mut error = "";
     let loc_addr = "127.0.0.1:1337";
+    let ip = format!("{}", my_internet_ip::get().unwrap());
+    let pub_addr = ip.as_str();
     let mut core = Core::new().unwrap();
     let handle = core.handle();
 
     let sock = UdpSocket::bind(&loc_addr.parse().unwrap(), &handle).unwrap();
-    let key = handshake(&loc_addr, &rem_addr, &sock, pass).unwrap_or_else(|err| {
+
+    sock.send_to(pub_addr.as_bytes(), &rem_addr).unwrap();
+    let (_num, ind_addr) = sock.recv_from(&mut [0u8]).unwrap();
+    
+    let key = handshake(&loc_addr, &ind_addr, &sock, pass).unwrap_or_else(|err| {
         error = err;
         Key::from_pw(KeyType::Aes128, pass, loc_addr)
     });
@@ -34,7 +40,7 @@ pub fn init(rem_addr: SocketAddr, pass: &String) -> DualResult<(), &'static str>
         return Err(error);
     }
 
-    let (udp_sink, udp_stream) = sock.framed(UdpVecCodec::new(rem_addr))
+    let (udp_sink, udp_stream) = sock.framed(UdpVecCodec::new(ind_addr))
     	.split();
 
     let tun = EncryptedTun::<With<SplitSink<Async>, Vec<u8>, De, Result<Vec<u8>>>, Map<SplitStream<Async>, En>>::new(&key, &handle);
