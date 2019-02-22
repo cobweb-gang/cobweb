@@ -6,7 +6,7 @@ use tun_tap::{Iface, Mode};
 use tun_tap::async::Async;
 use mac_utun::get_utun;
 use std::process::Command;
-use std::net::SocketAddr;
+use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 use tokio_core::reactor::{Core, Handle};
 use tokio_core::net::{UdpSocket, UdpCodec};
 use tokio::net::UdpSocket as FullUdpSocket;
@@ -16,22 +16,24 @@ use futures::stream::{SplitSink, SplitStream};
 use futures::sink::With;
 use futures::stream::Map;
 use std::result::Result as DualResult;
+use std::net::UdpSocket as SyncUdpSocket;
 
 #[cfg(target_os = "linux")]
 pub fn init(rem_addr: SocketAddr, pass: &String) -> DualResult<(), &'static str> {
     let mut error = "";
-    let loc_addr = "127.0.0.1:1337";
+    let loc_addr = "0.0.0.0:1337";
     let ip = format!("{}", my_internet_ip::get().unwrap());
     let pub_addr = ip.as_str();
     let mut core = Core::new().unwrap();
     let handle = core.handle();
 
     let sock = UdpSocket::bind(&loc_addr.parse().unwrap(), &handle).unwrap();
+    let init_sock = SyncUdpSocket::bind(SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), 1338)).unwrap();
 
-    sock.send_to(pub_addr.as_bytes(), &rem_addr).unwrap();
-    let (_num, ind_addr) = sock.recv_from(&mut [0u8]).unwrap();
+    init_sock.send_to(pub_addr.as_bytes(), &rem_addr).unwrap();
+    let (_num, ind_addr) = init_sock.recv_from(&mut [0u8]).unwrap();
     
-    let key = handshake(&loc_addr, &ind_addr, &sock, pass).unwrap_or_else(|err| {
+    let key = handshake(&loc_addr, &ind_addr, &init_sock, pass).unwrap_or_else(|err| {
         error = err;
         Key::from_pw(KeyType::Aes128, pass, loc_addr)
     });
@@ -66,6 +68,11 @@ pub fn init(rem_addr: SocketAddr, pass: &String) -> DualResult<(), &'static str>
     let mut core = Core::new().unwrap();
     let handle = core.handle();
 
+    /*
+     * You need to fix this
+     * You are getting a utun and then creating another tun device via EncryptedTun
+     * Also the tokio socket is weird
+     */
     let utun = get_utun().unwrap().bind(loc_addr).unwrap();
     let sock = FullUdpSocket::from_std(utun, &handle).unwrap();
     let key = handshake(&loc_addr, &rem_addr, &sock, pass).unwrap_or_else(|err| {

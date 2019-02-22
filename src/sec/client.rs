@@ -1,6 +1,6 @@
 use spake2::{Ed25519Group, Identity, Password, SPAKE2};
 use keybob::{Key, KeyType};
-use tokio_core::net::UdpSocket;
+use std::net::UdpSocket;
 use futures::prelude::*;
 use futures_retry::{FutureRetry, RetryPolicy};
 use std::net::SocketAddr;
