@@ -159,7 +159,6 @@ dependencies = [
  "miscreant 0.4.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "my_internet_ip 0.1.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "spake2 0.1.1 (registry+https://github.com/rust-lang/crates.io-index)",
- "tokio 0.1.14 (registry+https://github.com/rust-lang/crates.io-index)",
  "tokio-core 0.1.17 (registry+https://github.com/rust-lang/crates.io-index)",
  "tokio-uds 0.2.5 (registry+https://github.com/rust-lang/crates.io-index)",
  "tun-tap 0.1.2 (registry+https://github.com/rust-lang/crates.io-index)",

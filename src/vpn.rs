@@ -9,8 +9,6 @@ use std::process::Command;
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 use tokio_core::reactor::{Core, Handle};
 use tokio_core::net::{UdpSocket, UdpCodec};
-use tokio::net::UdpSocket as FullUdpSocket;
-use tokio::net::UdpFramed as FullUdpFramed;
 use futures::prelude::*;
 use futures::stream::{SplitSink, SplitStream};
 use futures::sink::With;
@@ -68,13 +66,8 @@ pub fn init(rem_addr: SocketAddr, pass: &String) -> DualResult<(), &'static str>
     let mut core = Core::new().unwrap();
     let handle = core.handle();
 
-    /*
-     * You need to fix this
-     * You are getting a utun and then creating another tun device via EncryptedTun
-     * Also the tokio socket is weird
-     */
     let utun = get_utun().unwrap().bind(loc_addr).unwrap();
-    let sock = FullUdpSocket::from_std(utun, &handle).unwrap();
+    let sock = UdpSocket::from_socket(utun, &handle).unwrap();
     let key = handshake(&loc_addr, &rem_addr, &sock, pass).unwrap_or_else(|err| {
         error = err;
         Key::from_pw(KeyType::Aes128, pass, loc_addr)
@@ -84,20 +77,16 @@ pub fn init(rem_addr: SocketAddr, pass: &String) -> DualResult<(), &'static str>
         return Err(error);
     }
 
-    let (udp_sink, udp_stream) = FullUdpFramed.new(sock, UdpVecCodec::new(rem_addr))
+    let encryptor = En::new(&key);
+    let decryptor = De::new(&key);
+
+    let (udp_sink, udp_stream) = UdpFramed.new(sock, UdpVecCodec::new(rem_addr))
     	.split();
 
-    let tun = EncryptedTun::<With<SplitSink<Async>, Vec<u8>, De, Result<Vec<u8>>>, Map<SplitStream<Async>, En>>::new(&key, &handle);
-
-    if tun.is_err() {
-        return Err("ERROR: Permission denied. Try running as superuser");
-    }
-
-    let (tun_sink, tun_stream) = tun.unwrap().split();
-
-    let sender = tun_stream.forward(udp_sink);
-    let receiver = udp_stream.forward(tun_sink);
-    core.run(sender.join(receiver))
+    let decrypted_sink = udp_sink.with(decryptor);
+    let encrypted_stream = udp_stream.map(encryptor);
+    
+    core.run(udp_stream.forward(udp_sink))
         .unwrap();
     
     Ok(())
