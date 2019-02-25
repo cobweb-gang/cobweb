@@ -68,7 +68,13 @@ pub fn init(rem_addr: SocketAddr, pass: &String) -> DualResult<(), &'static str>
 
     let utun = get_utun().unwrap().bind(loc_addr).unwrap();
     let sock = UdpSocket::from_socket(utun, &handle).unwrap();
-    let key = handshake(&loc_addr, &rem_addr, &sock, pass).unwrap_or_else(|err| {
+    
+    let init_sock = SyncUdpSocket::bind(SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), 1338)).unwrap();
+
+    init_sock.send_to(pub_addr.as_bytes(), &rem_addr).unwrap();
+    let (_num, ind_addr) = init_sock.recv_from(&mut [0u8]).unwrap();
+    
+    let key = handshake(&loc_addr, &ind_addr, &init_sock, pass).unwrap_or_else(|err| {
         error = err;
         Key::from_pw(KeyType::Aes128, pass, loc_addr)
     });
