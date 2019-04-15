@@ -6,41 +6,51 @@ use tun_tap::{Iface, Mode};
 use tun_tap::async::Async;
 use mac_utun::get_utun;
 use std::process::Command;
-use std::net::{IpAddr, Ipv4Addr, SocketAddr};
+use std::net::SocketAddr;
 use tokio_core::reactor::{Core, Handle};
-use tokio_core::net::{UdpSocket, UdpCodec};
+use tokio_core::net::TcpStream;
+use tokio_io::AsyncRead;
+use tokio_codec::{Decoder, Encoder};
 use futures::prelude::*;
 use futures::stream::{SplitSink, SplitStream};
 use futures::sink::With;
 use futures::stream::Map;
+use bytes::BytesMut;
 use std::result::Result as DualResult;
-use std::net::UdpSocket as SyncUdpSocket;
+use std::io::{Read, Write};
+use std::net::Shutdown;
+//use std::net::UdpSocket as SyncUdpSocket;
 
 #[cfg(target_os = "linux")]
-pub fn init(rem_addr: SocketAddr, pass: &String) -> DualResult<(), &'static str> {
+pub fn init(mut rem_addr: SocketAddr, pass: &String) -> DualResult<(), &'static str> {
     let mut error = "";
     let loc_addr = "0.0.0.0:1337";
+    //let setup_addr: SocketAddr = "0.0.0.0:1338".parse().unwrap();
     let ip = format!("{}", my_internet_ip::get().unwrap());
     let pub_addr = ip.as_str();
     let mut core = Core::new().unwrap();
     let handle = core.handle();
 
-    let sock = UdpSocket::bind(&loc_addr.parse().unwrap(), &handle).unwrap();
-    let init_sock = SyncUdpSocket::bind(SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), 1338)).unwrap();
+    let mut sock = TcpStream::connect(&rem_addr, &handle).wait().unwrap();
 
-    init_sock.send_to(pub_addr.as_bytes(), &rem_addr).unwrap();
-    let (_num, ind_addr) = init_sock.recv_from(&mut [0u8]).unwrap();
+    sock.write(pub_addr.as_bytes()).unwrap();
+    let mut client_num = [0u8; 2];
+    sock.read(&mut client_num).unwrap();
+    rem_addr.set_port(u16::from_be_bytes(client_num));
     
-    let key = handshake(&loc_addr, &ind_addr, &init_sock, pass).unwrap_or_else(|err| {
+    sock.shutdown(Shutdown::Both).unwrap();
+    let sock2 = TcpStream::connect(&rem_addr, &handle).wait().unwrap();
+    
+    let key = handshake(&loc_addr, &rem_addr, &sock2, pass).unwrap_or_else(|err| {
         error = err;
         Key::from_pw(KeyType::Aes128, pass, loc_addr)
     });
-
+    
     if error != "" {
         return Err(error);
     }
 
-    let (udp_sink, udp_stream) = sock.framed(UdpVecCodec::new(ind_addr))
+    let (tcp_sink, tcp_stream) = sock2.framed(TcpVecCodec)
     	.split();
 
     let tun = EncryptedTun::<With<SplitSink<Async>, Vec<u8>, De, Result<Vec<u8>>>, Map<SplitStream<Async>, En>>::new(&key, &handle);
@@ -51,8 +61,8 @@ pub fn init(rem_addr: SocketAddr, pass: &String) -> DualResult<(), &'static str>
 
     let (tun_sink, tun_stream) = tun.unwrap().split();
 
-    let sender = tun_stream.forward(udp_sink);
-    let receiver = udp_stream.forward(tun_sink);
+    let sender = tun_stream.forward(tcp_sink);
+    let receiver = tcp_stream.forward(tun_sink);
     core.run(sender.join(receiver))
         .unwrap();
     
@@ -155,22 +165,24 @@ where T: Sink<SinkItem=Vec<u8>>,
     }
 }
 
-pub struct UdpVecCodec(SocketAddr);
+struct TcpVecCodec;
 
-impl UdpVecCodec {
-    pub fn new(addr: SocketAddr) -> Self {
-        UdpVecCodec(addr)
+impl Decoder for TcpVecCodec {
+    type Item = Vec<u8>;
+    type Error = std::io::Error;
+
+    fn decode (&mut self, buf: &mut BytesMut) -> std::io::Result<Option<Self::Item>> {
+        Ok(Some(buf.iter().cloned().collect()))
     }
 }
 
-impl UdpCodec for UdpVecCodec {
-	type In = Vec<u8>;
-	type Out = Vec<u8>;
-	fn decode(&mut self, _src: &SocketAddr, buf: &[u8]) -> Result<Self::In> {
-		Ok(buf.to_owned())
-	}
-	fn encode(&mut self, msg: Self::Out, buf: &mut Vec<u8>) -> SocketAddr {
-		buf.extend(&msg);
-		self.0
-	}
+impl Encoder for TcpVecCodec {
+    type Item = Vec<u8>;
+    type Error = std::io::Error;
+
+    fn encode (&mut self, item: Self::Item, dst: &mut BytesMut) -> std::io::Result<()> {
+        dst.extend_from_slice(item.as_slice());
+
+        Ok(())
+    }
 }

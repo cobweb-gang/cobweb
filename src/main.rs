@@ -50,7 +50,6 @@ fn main() {
     conn_button.on_clicked(&ui, {
         let ui = ui.clone();
         move |btn| {
-            btn.set_text(&ui, "Connecting...");
             let mut err = false;
             let pass = pass_entry.value(&ui);
             let mut ip_vec: Vec<u8> = vec![];
