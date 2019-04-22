@@ -68,6 +68,7 @@ fn main() {
                 let ip = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(ip_vec[0], ip_vec[1], ip_vec[2], ip_vec[3])), 1337);
                 btn.set_text(&ui, "Connected");
                 init(ip, &pass).unwrap_or_else(|err| {
+                    println!("Error");
                     btn.set_text(&ui, err);
                 });
             }

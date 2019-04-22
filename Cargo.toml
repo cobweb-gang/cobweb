@@ -13,7 +13,6 @@ mac_utun = { path = "./mac_utun" }
 tokio-uds = "0.2.5"
 futures-retry = "0.3.0"
 miscreant = "0.4.2"
-my_internet_ip = "0.1.1"
 tokio-io = "0.1.6"
 bytes = "0.4.12"
 tokio-codec = "0.1.1"

@@ -1,7 +1,7 @@
 use sec::en::{En, De};
 use sec::client::handshake;
 use std::io::Result;
-use keybob::{Key, KeyType};
+use keybob::Key;
 use tun_tap::{Iface, Mode};
 use tun_tap::async::Async;
 use mac_utun::get_utun;
@@ -10,6 +10,7 @@ use std::net::SocketAddr;
 use tokio_core::reactor::{Core, Handle};
 use tokio_core::net::TcpStream;
 use tokio_io::AsyncRead;
+use bytes::buf::IntoBuf;
 use tokio_codec::{Decoder, Encoder};
 use futures::prelude::*;
 use futures::stream::{SplitSink, SplitStream};
@@ -17,49 +18,48 @@ use futures::sink::With;
 use futures::stream::Map;
 use bytes::BytesMut;
 use std::result::Result as DualResult;
-use std::io::{Read, Write};
 use std::net::Shutdown;
-//use std::net::UdpSocket as SyncUdpSocket;
 
 #[cfg(target_os = "linux")]
 pub fn init(mut rem_addr: SocketAddr, pass: &String) -> DualResult<(), &'static str> {
-    let mut error = "";
     let loc_addr = "0.0.0.0:1337";
-    //let setup_addr: SocketAddr = "0.0.0.0:1338".parse().unwrap();
-    let ip = format!("{}", my_internet_ip::get().unwrap());
-    let pub_addr = ip.as_str();
     let mut core = Core::new().unwrap();
     let handle = core.handle();
 
-    let mut sock = TcpStream::connect(&rem_addr, &handle).wait().unwrap();
+    let sock = TcpStream::connect(&rem_addr, &handle).wait();
+   
+    let mut sock = match sock {
+        Ok(sock) => sock,
+        Err(_e) => return Err("ERROR: Connection refused. Do you have the correct IP address?"),
+    };
 
-    sock.write(pub_addr.as_bytes()).unwrap();
-    let mut client_num = [0u8; 2];
-    sock.read(&mut client_num).unwrap();
-    rem_addr.set_port(u16::from_be_bytes(client_num));
+    let client_num: &mut [u8] = &mut [0u8];
+    sock.read_buf(&mut client_num.into_buf()).unwrap();
+    let mut port_bytes = [0u8; 2];
+    port_bytes.clone_from_slice(client_num);
+    rem_addr.set_port(u16::from_be_bytes(port_bytes));
     
+    let key = handshake(&loc_addr, &rem_addr, &sock, pass);
+   
+    let key = match key {
+        Ok(key) => key,
+        Err(e) => return Err(e),
+    };
+
     sock.shutdown(Shutdown::Both).unwrap();
     let sock2 = TcpStream::connect(&rem_addr, &handle).wait().unwrap();
     
-    let key = handshake(&loc_addr, &rem_addr, &sock2, pass).unwrap_or_else(|err| {
-        error = err;
-        Key::from_pw(KeyType::Aes128, pass, loc_addr)
-    });
-    
-    if error != "" {
-        return Err(error);
-    }
-
     let (tcp_sink, tcp_stream) = sock2.framed(TcpVecCodec)
     	.split();
 
     let tun = EncryptedTun::<With<SplitSink<Async>, Vec<u8>, De, Result<Vec<u8>>>, Map<SplitStream<Async>, En>>::new(&key, &handle);
+   
+    let tun = match tun {
+        Ok(tun) => tun,
+        Err(e) => return Err(e),
+    };
 
-    if tun.is_err() {
-        return Err("ERROR: Permission denied. Try running as superuser");
-    }
-
-    let (tun_sink, tun_stream) = tun.unwrap().split();
+    let (tun_sink, tun_stream) = tun.split();
 
     let sender = tun_stream.forward(tcp_sink);
     let receiver = tcp_stream.forward(tun_sink);
