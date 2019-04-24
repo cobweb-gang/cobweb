@@ -1,7 +1,10 @@
 #![feature(trivial_bounds)]
 #![feature(unboxed_closures)]
 #![feature(fn_traits)]
+#![feature(await_macro, async_await, futures_api)]
 
+#[macro_use]
+extern crate tokio;
 extern crate futures;
 extern crate tokio_core;
 extern crate tokio_io;

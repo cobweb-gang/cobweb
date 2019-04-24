@@ -1,18 +1,16 @@
-use sec::en::{En, De};
-use sec::client::handshake;
+use crate::sec::en::{En, De};
+use crate::sec::client::handshake;
 use std::io::Result;
 use keybob::Key;
 use tun_tap::{Iface, Mode};
-use tun_tap::async::Async;
+use tun_tap::r#async::Async;
 use mac_utun::get_utun;
 use std::process::Command;
 use std::net::SocketAddr;
 use tokio_core::reactor::{Core, Handle};
 use tokio_core::net::TcpStream;
-use tokio_io::AsyncRead;
-use bytes::buf::IntoBuf;
 use tokio_codec::{Decoder, Encoder};
-use futures::prelude::*;
+use tokio::prelude::*;
 use futures::stream::{SplitSink, SplitStream};
 use futures::sink::With;
 use futures::stream::Map;
@@ -33,11 +31,9 @@ pub fn init(mut rem_addr: SocketAddr, pass: &String) -> DualResult<(), &'static 
         Err(_e) => return Err("ERROR: Connection refused. Do you have the correct IP address?"),
     };
 
-    let client_num: &mut [u8] = &mut [0u8];
-    sock.read_buf(&mut client_num.into_buf()).unwrap();
-    let mut port_bytes = [0u8; 2];
-    port_bytes.clone_from_slice(client_num);
-    rem_addr.set_port(u16::from_be_bytes(port_bytes));
+    let mut client_num = [0u8; 2];
+    sock.read_async(&mut client_num);
+    rem_addr.set_port(u16::from_be_bytes(client_num));
     
     let key = handshake(&loc_addr, &rem_addr, &sock, pass);
    
