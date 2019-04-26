@@ -10,7 +10,7 @@ use std::net::SocketAddr;
 use tokio_core::reactor::{Core, Handle};
 use tokio_core::net::TcpStream;
 use tokio_codec::{Decoder, Encoder};
-use tokio::prelude::*;
+use tokio_io::io::read;
 use futures::stream::{SplitSink, SplitStream};
 use futures::sink::With;
 use futures::stream::Map;
@@ -26,13 +26,13 @@ pub fn init(mut rem_addr: SocketAddr, pass: &String) -> DualResult<(), &'static 
 
     let sock = TcpStream::connect(&rem_addr, &handle).wait();
    
-    let mut sock = match sock {
+    let sock = match sock {
         Ok(sock) => sock,
         Err(_e) => return Err("ERROR: Connection refused. Do you have the correct IP address?"),
     };
 
     let mut client_num = [0u8; 2];
-    sock.read_async(&mut client_num);
+    read(&sock, &mut client_num).wait().unwrap();
     rem_addr.set_port(u16::from_be_bytes(client_num));
     
     let key = handshake(&loc_addr, &rem_addr, &sock, pass);

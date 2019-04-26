@@ -16,7 +16,6 @@ miscreant = "0.4.2"
 tokio-io = "0.1.6"
 bytes = "0.4.12"
 tokio-codec = "0.1.1"
-tokio = { version = "0.1.19", features = ["async-await-preview"] }
 
 [build]
 rustflags = ["-Ctarget-feature=+aes"]
