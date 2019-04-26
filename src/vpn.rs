@@ -11,6 +11,8 @@ use tokio_core::reactor::{Core, Handle};
 use tokio_core::net::TcpStream;
 use tokio_codec::{Decoder, Encoder};
 use tokio_io::io::read;
+use tokio_io::AsyncRead;
+use futures::prelude::*;
 use futures::stream::{SplitSink, SplitStream};
 use futures::sink::With;
 use futures::stream::Map;
