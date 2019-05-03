@@ -14,11 +14,10 @@ pub fn handshake(client_id: &str, server_addr: &SocketAddr, sock: &TcpStream, pa
 
     write_all(sock, &outbound_msg).wait().unwrap();
 
-    let mut inbound_msg: &mut [u8] = &mut [0u8; 35];
+    let mut inbound_msg: &mut [u8] = &mut [0u8; 33];
     read(sock, &mut inbound_msg).wait().unwrap();
 
-    let (slice, _vec) = inbound_msg.split_at(33);
-    let key = spake.finish(&slice).unwrap();
+    let key = spake.finish(&inbound_msg).unwrap();
     let key_pass = format!("{:?}", key);
 
     Ok(Key::from_pw(KeyType::Aes128, &key_pass, client_id))

@@ -35,9 +35,9 @@ pub fn init(mut rem_addr: SocketAddr, pass: &String) -> DualResult<(), &'static 
 
     let mut client_num = [0u8; 2];
     read(&sock, &mut client_num).wait().unwrap();
-    rem_addr.set_port(u16::from_be_bytes(client_num));
     
     let key = handshake(&loc_addr, &rem_addr, &sock, pass);
+    rem_addr.set_port(u16::from_be_bytes(client_num));
    
     let key = match key {
         Ok(key) => key,
