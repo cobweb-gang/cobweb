@@ -7,11 +7,11 @@ extern crate tokio_core;
 extern crate tokio_io;
 extern crate tokio_codec;
 extern crate tun_tap;
+extern crate tun_tap_mac;
 extern crate miscreant;
 extern crate spake2;
 extern crate keybob;
 extern crate iui;
-extern crate mac_utun;
 extern crate futures_retry;
 extern crate bytes;
 
